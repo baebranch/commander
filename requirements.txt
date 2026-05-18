@@ -1,0 +1,8 @@
+flet
+pynput
+pillow
+pystray
+pyaudio
+pyautogui
+speechmatics-rt
+speechmatics-voice
