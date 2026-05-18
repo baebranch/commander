@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ancilla-command"
+version = "0.1.0"
+description = "Background voice agent for desktop — dictation, meeting recorder, and computer control."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+  "pynput",
+  "pillow",
+  "pystray",
+  "pyaudio",
+  "keyring",
+  "pyautogui",
+  "speechmatics-rt",
+  "speechmatics-voice",
+]
+
+[project.scripts]
+command = "command.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["command*"]

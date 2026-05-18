@@ -1,4 +1,5 @@
-""" The Command Runtime """
+"""Entry point for `python -m command`."""
+
 from command.tray_app import TrayApp
 
 
