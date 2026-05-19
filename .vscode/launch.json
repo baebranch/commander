@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Commander (module)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "commander",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "env": {
+        "SPEECHMATICS_API_KEY": "${env:SPEECHMATICS_API_KEY}",
+        "GEMINI_API_KEY": "${env:GEMINI_API_KEY}"
+      }
+    }
+  ]
+}
