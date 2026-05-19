@@ -1,5 +1,5 @@
 """ The Command Runtime """
-from command.tray_app import TrayApp
+from commander.tray_app import TrayApp
 
 
 def main() -> None:

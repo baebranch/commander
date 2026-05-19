@@ -6,4 +6,4 @@ pyaudio
 keyring
 pyautogui
 speechmatics-rt
-speechmatics-voice
+speechmatics-voice[smart]

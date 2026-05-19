@@ -182,3 +182,42 @@ def delete_speechmatics_api_key() -> bool:
     print("delete_speechmatics_api_key error:", e)
     return False
 
+
+def get_gemini_api_key() -> Optional[str]:
+  """Return the stored Gemini/Google API key.
+
+  Tries the OS keyring first (preferred). Falls back to the environment
+  variables `GOOGLE_API_KEY` or `GEMINI_API_KEY`.
+  """
+  try:
+    import keyring
+    key = keyring.get_password("ancilla-command", "gemini_api_key")
+    if key:
+      return key
+  except Exception:
+    pass
+
+  return os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+
+
+def set_gemini_api_key(key: str) -> bool:
+  """Store the Gemini/Google API key in the OS keyring. Returns True on success."""
+  try:
+    import keyring
+    keyring.set_password("ancilla-command", "gemini_api_key", key)
+    return True
+  except Exception as e:
+    print("set_gemini_api_key error:", e)
+    return False
+
+
+def delete_gemini_api_key() -> bool:
+  """Remove the stored Gemini key from the OS keyring."""
+  try:
+    import keyring
+    keyring.delete_password("ancilla-command", "gemini_api_key")
+    return True
+  except Exception as e:
+    print("delete_gemini_api_key error:", e)
+    return False
+

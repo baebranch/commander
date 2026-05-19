@@ -2,6 +2,16 @@ import os
 import asyncio
 import threading
 from typing import Callable, Optional
+from speechmatics.rt import Microphone
+from speechmatics.voice import (
+  VoiceAgentClient,
+  VoiceAgentConfig,
+  VoiceAgentConfigPreset,
+  AgentServerMessageType,
+  EndOfUtteranceMode,
+  SpeechSegmentConfig,
+  AdditionalVocabEntry
+)
 
 
 class SpeechmaticsAgent:
@@ -12,10 +22,10 @@ class SpeechmaticsAgent:
       `on_final_segment(text)` for finalized segments.
   """
 
-  def __init__(self, api_key: Optional[str] = None, on_final_segment: Optional[Callable] = None, preset: str = "scribe", sample_rate: int = 16000, chunk_size: int = 160, device_index: Optional[int] = None):
+  def __init__(self, api_key: Optional[str] = None, on_final_segment: Optional[Callable] = None, mode: str = "dictation", sample_rate: int = 16000, chunk_size: int = 160, device_index: Optional[int] = None):
     self.api_key = api_key or os.getenv("SPEECHMATICS_API_KEY")
     self.on_final_segment = on_final_segment
-    self.preset = preset
+    self.mode = mode
     self.sample_rate = sample_rate
     self.chunk_size = chunk_size
     self.device_index = device_index
@@ -51,15 +61,58 @@ class SpeechmaticsAgent:
     except Exception as e:
       print("SpeechmaticsAgent runtime error:", e)
 
-  async def _run(self):
-    try:
-      from speechmatics.rt import Microphone
-      from speechmatics.voice import VoiceAgentClient, AgentServerMessageType
-    except Exception as e:
-      print("Speechmatics SDK not available:", e)
-      print("Install with: pip install speechmatics-voice speechmatics-rt")
-      return
+  def _build_config(self, VoiceAgentConfig, VoiceAgentConfigPreset, EndOfUtteranceMode):
+    """Return a VoiceAgentConfig appropriate for the current mode.
 
+    - dictation : SCRIBE preset — note-taking optimised segmentation.
+    - meeting   : SMART_TURN preset (ADAPTIVE + ML turn detection) with
+                  diarization enabled so segments carry a speaker_id.  Falls
+                  back to plain ADAPTIVE when speechmatics-voice[smart] is not
+                  installed.
+    - command   : ADAPTIVE preset — natural-conversation turn detection.
+    """
+    # Overrides shared by every mode
+    base = dict(sample_rate=self.sample_rate, include_partials=False)
+
+    if self.mode == "meeting":
+      overrides = VoiceAgentConfig(
+        **base,
+        enable_diarization=True
+      )
+      try:
+        from speechmatics.voice import SmartTurnConfig
+        return VoiceAgentConfigPreset.SMART_TURN(overrides)
+      except ImportError:
+        print("[Command] speechmatics-voice[smart] not installed — falling back to ADAPTIVE turn detection.")
+        print("          Run: pip install speechmatics-voice[smart]  for ML-based turn detection.")
+        overrides2 = VoiceAgentConfig(
+          **base,
+          enable_diarization=True,
+          end_of_utterance_mode=EndOfUtteranceMode.ADAPTIVE,
+        )
+        return VoiceAgentConfigPreset.ADAPTIVE(overrides2)
+
+    elif self.mode == "dictation":
+      # SCRIBE preset is purpose-built for note-taking / dictation
+      return VoiceAgentConfigPreset.SCRIBE(
+        VoiceAgentConfig(
+          **base
+        )
+      )
+
+    else:  # command — conversational, adaptive turn detection
+      overrides = VoiceAgentConfig(
+        **base,
+        end_of_utterance_mode=EndOfUtteranceMode.ADAPTIVE,
+        additional_vocab=[
+          SpeechSegmentConfig(
+            emit_sentences=True
+          )
+        ]
+      )
+      return VoiceAgentConfigPreset.ADAPTIVE(overrides)
+
+  async def _run(self):
     if not self.api_key:
       print("SPEECHMATICS_API_KEY not set; Speechmatics client will not start.")
       return
@@ -67,14 +120,20 @@ class SpeechmaticsAgent:
     self._stop_event = asyncio.Event()
     self._loop = asyncio.get_running_loop()
 
-    client = VoiceAgentClient(api_key=self.api_key, preset=self.preset)
+    config = self._build_config(VoiceAgentConfig, VoiceAgentConfigPreset, EndOfUtteranceMode)
+    client = VoiceAgentClient(api_key=self.api_key, config=config)
 
     @client.on(AgentServerMessageType.ADD_SEGMENT)
     def _on_segment(message):
       for segment in message.get("segments", []):
-        text = segment.get("text", "")
+        text = (segment.get("text") or "").strip()
         if not text:
           continue
+        # For meeting mode, prepend the speaker label so the transcript is readable
+        if self.mode == "meeting":
+          speaker = segment.get("speaker_id", "")
+          if speaker:
+            text = f"{speaker}: {text}"
         if self.on_final_segment:
           # Dispatch in a daemon thread — on_final_segment may call blocking
           # GUI APIs (pyautogui) that must not run on the event loop thread.
